@@ -199,8 +199,8 @@ aside.buy .bh p{margin:4px 0 0;color:var(--muted);font-size:.85rem}
   <form class="panel login" id="loginForm">
     <h1>Console Repair Bench</h1>
     <p class="sub" style="margin:0">Sign in to see the consoles on the bench.</p>
-    <label class="f" for="lEmail">Email
-      <input class="field" id="lEmail" type="email" autocomplete="username" required>
+    <label class="f" for="lEmail">Username
+      <input class="field" id="lEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
     </label>
     <label class="f" for="lPass">Password
       <input class="field" id="lPass" type="password" autocomplete="current-password" required>
@@ -307,7 +307,7 @@ aside.buy .bh p{margin:4px 0 0;color:var(--muted);font-size:.85rem}
 </div>
 
 <script src="config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <script>
 (function(){
   const $ = s => document.querySelector(s);
@@ -330,13 +330,16 @@ aside.buy .bh p{margin:4px 0 0;color:var(--muted);font-size:.85rem}
   $("#loginForm").addEventListener("submit", async e => {
     e.preventDefault();
     $("#lBtn").disabled = true; $("#lErr").textContent = "";
-    const { error } = await sb.auth.signInWithPassword({ email: $("#lEmail").value.trim(), password: $("#lPass").value });
+    // A plain username like "admin" becomes admin@<loginDomain> behind the scenes; a full email also works.
+    let login = $("#lEmail").value.trim().toLowerCase();
+    if (!login.includes("@")) login += "@" + (cfg.loginDomain || "repairbench.local");
+    const { error } = await sb.auth.signInWithPassword({ email: login, password: $("#lPass").value });
     $("#lBtn").disabled = false;
-    if (error) $("#lErr").textContent = /invalid/i.test(error.message) ? "Wrong email or password." : "Couldn't sign in: " + error.message;
+    if (error) $("#lErr").textContent = /invalid/i.test(error.message) ? "Wrong username or password." : "Couldn't sign in: " + error.message;
   });
   $("#signOut").onclick = () => sb.auth.signOut();
   sb.auth.onAuthStateChange((_ev, session) => {
-    if (session){ $("#who").textContent = session.user.email; show("appView"); if (!started){ started = true; start(); } }
+    if (session){ $("#who").textContent = "Signed in as " + String(session.user.email || "").replace("@" + (cfg.loginDomain || "repairbench.local"), ""); show("appView"); if (!started){ started = true; start(); } }
     else { show("loginView"); }
   });
 
