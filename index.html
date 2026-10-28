@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Console Repair Bench</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+
+/* Layout: workbench — tagged repair tickets on the left, a running "parts to buy" list on the right */
+:root{
+  --paper:#f2f5f1; --card:#ffffff; --ink:#17211b; --muted:#5a6a60; --line:#d3dcd5;
+  --pcb:#1b6a44; --pcb-soft:#e1efe6; --amber:#a96a08; --amber-soft:#fbefd8;
+  --done:#6c7a71; --done-soft:#e8ece9; --danger:#b3261e; --danger-soft:#fbe6e4;
+  --label:#fffbe8; --label-ink:#17211b; --shade:rgba(8,14,10,.86);
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0e1511; --card:#151f19; --ink:#e3ebe5; --muted:#93a398; --line:#283630;
+  --pcb:#4fc58b; --pcb-soft:#173126; --amber:#e8a73e; --amber-soft:#33270f;
+  --done:#8d9b92; --done-soft:#1f2a24; --danger:#ff8a80; --danger-soft:#3a1916;
+  --label:#efe9cf; --label-ink:#111a14; --shade:rgba(0,0,0,.9); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0e1511; --card:#151f19; --ink:#e3ebe5; --muted:#93a398; --line:#283630;
+  --pcb:#4fc58b; --pcb-soft:#173126; --amber:#e8a73e; --amber-soft:#33270f;
+  --done:#8d9b92; --done-soft:#1f2a24; --danger:#ff8a80; --danger-soft:#3a1916;
+  --label:#efe9cf; --label-ink:#111a14; --shade:rgba(0,0,0,.9); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1120px;margin:0 auto;padding-block:20px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;letter-spacing:.01em;margin:0;text-wrap:balance;line-height:1.1}
+h1{font-size:2.4rem;text-transform:uppercase}
+h2{font-size:1.35rem;text-transform:uppercase;letter-spacing:.04em}
+h3{font-size:1.45rem}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--pcb);outline-offset:2px}
+
+header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between;margin-bottom:18px}
+.sub{color:var(--muted);margin:4px 0 0}
+.save-note{font-size:.8rem;color:var(--muted)}
+
+.steps{display:flex;flex-wrap:wrap;gap:8px 20px;margin:0 0 20px;padding:12px 14px;border:1px dashed var(--line);border-radius:6px;list-style:none;color:var(--muted);font-size:.9rem}
+.steps b{color:var(--ink);font-family:var(--f-mono);font-size:.8rem;margin-right:6px}
+
+.btn{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:8px 14px;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{background:var(--pcb);border-color:var(--pcb);color:var(--card);font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.small{padding:4px 10px;font-size:.85rem}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover{color:var(--ink);border-color:var(--line)}
+.linkbtn{border:0;background:none;padding:0;color:var(--pcb);font-weight:600;text-decoration:underline;text-underline-offset:2px;font-size:.85rem}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;align-items:start}
+@media (max-width:860px){.layout{grid-template-columns:minmax(0,1fr)}}
+
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+.tab{border:1px solid var(--line);background:transparent;border-radius:999px;padding:5px 12px;font-size:.88rem;color:var(--muted)}
+.tab[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.tab .n{font-family:var(--f-mono);font-size:.75rem;margin-left:4px;opacity:.8;font-variant-numeric:tabular-nums}
+.search{flex:1 1 180px;min-width:0;border:1px solid var(--line);background:var(--card);border-radius:6px;padding:7px 10px}
+
+/* forms */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:12px}
+#addForm{margin-bottom:16px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:160px 1fr 1fr;gap:12px}
+@media (max-width:620px){.row,.row3{grid-template-columns:1fr}}
+label.f{display:grid;gap:4px;font-size:.85rem;font-weight:500;align-content:start}
+.hint{font-weight:400;color:var(--muted);font-size:.8rem}
+.hint.warn{color:var(--danger)}
+.field{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+.field.tagf{font-family:var(--f-mono);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+textarea.field{resize:vertical;min-height:60px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* photos */
+.photos{display:flex;flex-wrap:wrap;gap:8px}
+.thumb{width:84px;height:84px;border-radius:6px;border:1px solid var(--line);overflow:hidden;padding:0;background:var(--paper);flex:none;position:relative}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb.big{width:112px;height:112px}
+.thumb .rm{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:0;background:var(--shade);color:#fff;font-size:.9rem;line-height:1}
+.addphoto{width:84px;height:84px;border:1.5px dashed var(--line);border-radius:6px;display:grid;place-items:center;text-align:center;font-size:.75rem;color:var(--muted);cursor:pointer;flex:none;padding:6px;line-height:1.25}
+.addphoto:hover,.addphoto:focus-within{border-color:var(--pcb);color:var(--pcb)}
+.addphoto b{display:block;font-size:1.4rem;line-height:1}
+.addphoto input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.uploading{width:84px;height:84px;border-radius:6px;border:1px solid var(--line);display:grid;place-items:center;font-size:.75rem;color:var(--muted);text-align:center;background:var(--paper)}
+
+/* tickets */
+.list{display:grid;gap:14px}
+.ticket{background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:grid}
+.ticket .head{display:flex;gap:14px;align-items:start;padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.ticket .htext{flex:1;min-width:0;display:grid;gap:4px}
+.ticket .hrow{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between}
+.ticket .who{color:var(--muted);font-size:.88rem}
+.cover{width:84px;height:84px;border-radius:6px;overflow:hidden;border:1px solid var(--line);padding:0;background:var(--paper);flex:none}
+.cover img{width:100%;height:100%;object-fit:cover;display:block}
+.cover.empty{display:grid;place-items:center;font-size:.7rem;color:var(--muted);text-align:center;border-style:dashed;cursor:default}
+/* printed label sticker */
+.tag{display:inline-block;justify-self:start;font-family:var(--f-mono);font-weight:600;font-size:1.05rem;letter-spacing:.06em;
+  background:var(--label);color:var(--label-ink);border:1px solid var(--label-ink);border-radius:3px;padding:1px 8px;box-shadow:2px 2px 0 var(--line)}
+.tag.none{font-weight:500;font-size:.8rem;background:transparent;color:var(--muted);border:1px dashed var(--line);box-shadow:none}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:.8rem;font-weight:600;white-space:nowrap}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.pill.wait{background:var(--amber-soft);color:var(--amber)}
+.pill.ready{background:var(--pcb-soft);color:var(--pcb)}
+.pill.done{background:var(--done-soft);color:var(--done)}
+.pill.none{background:var(--done-soft);color:var(--muted)}
+.ticket .body{padding:12px 16px 14px;display:grid;gap:14px}
+.problem{margin:0}
+.problem b{font-weight:600}
+.sect{display:grid;gap:6px}
+.sectlabel{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.parts{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.part{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;border:1px solid transparent}
+.part:hover{border-color:var(--line)}
+.part input[type=checkbox]{width:20px;height:20px;accent-color:var(--pcb);flex:none;cursor:pointer}
+.part .pname{flex:1;min-width:0;overflow-wrap:anywhere;cursor:pointer}
+.part.got .pname{color:var(--muted);text-decoration:line-through}
+.part .pstate{font-size:.75rem;font-weight:600;white-space:nowrap}
+.part.miss .pstate{color:var(--amber)}
+.part.got .pstate{color:var(--pcb)}
+.part .x{border:0;background:transparent;color:var(--muted);padding:2px 6px;border-radius:4px;font-size:1rem;line-height:1}
+.part .x:hover{color:var(--danger);background:var(--danger-soft)}
+.addpart{display:flex;gap:8px}
+.addpart .field{flex:1}
+.noparts{color:var(--muted);font-size:.9rem;margin:0}
+.ticket.isdone{opacity:.8}
+.ticket .foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--paper);border-top:1px solid var(--line)}
+.foot .left{display:flex;flex-wrap:wrap;gap:8px}
+.confirm{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.9rem;color:var(--danger)}
+details.notes summary{cursor:pointer;color:var(--muted);font-size:.88rem}
+details.notes textarea{margin-top:6px}
+.err{font-size:.82rem;color:var(--danger);margin:0}
+
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:8px;padding:28px 20px;text-align:center;color:var(--muted)}
+.empty h3{color:var(--ink);margin-bottom:6px}
+
+/* shopping list */
+aside.buy{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+@media (max-width:860px){aside.buy{position:static}}
+aside.buy .bh{padding:14px 16px 10px;border-bottom:2px solid var(--amber)}
+aside.buy .bh p{margin:4px 0 0;color:var(--muted);font-size:.85rem}
+.buylist{list-style:none;margin:0;padding:6px 0}
+.buylist li{padding:8px 16px;display:grid;gap:4px;border-bottom:1px solid var(--line)}
+.buylist li:last-child{border-bottom:0}
+.buylist .bn{display:flex;justify-content:space-between;gap:8px;font-weight:600}
+.buylist .qty{font-family:var(--f-mono);font-size:.8rem;color:var(--amber);font-variant-numeric:tabular-nums;white-space:nowrap}
+.buylist .for{display:flex;flex-wrap:wrap;gap:4px}
+.mini{font-family:var(--f-mono);font-size:.72rem;font-weight:600;border:1px solid var(--line);border-radius:3px;padding:0 5px;color:var(--muted)}
+.buyempty{padding:16px;color:var(--muted);font-size:.9rem;margin:0}
+.copyrow{padding:10px 16px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.copyrow .msg{font-size:.8rem;color:var(--muted)}
+
+.stats{display:flex;gap:18px;flex-wrap:wrap}
+.stat{display:grid}
+.stat .v{font-family:var(--f-display);font-size:1.8rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.stat .k{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.stat.wait .v{color:var(--amber)} .stat.ready .v{color:var(--pcb)}
+
+.banner{padding:10px 14px;border-radius:6px;background:var(--danger-soft);color:var(--danger);margin-bottom:14px;font-size:.9rem}
+
+/* photo viewer */
+.viewer{position:fixed;inset:0;z-index:50;background:var(--shade);display:grid;grid-template-rows:auto 1fr;
+  padding-top:calc(env(safe-area-inset-top,0px) + 12px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 12px);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.viewer .vbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;color:#fff;margin-bottom:10px}
+.viewer .vbar .t{font-family:var(--f-mono);font-weight:600}
+.viewer .vbar .btn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.3);color:#fff}
+.viewer .vbar .btn.danger{color:#ffb3ab;border-color:#ffb3ab}
+.viewer .vimg{min-height:0;display:grid;place-items:center}
+.viewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px}
+@media (prefers-reduced-motion:no-preference){.ticket{transition:opacity .2s}}
+
+/* sign-in screen */
+.login{max-width:380px;margin:12vh auto 0;display:grid;gap:14px}
+.login h1{font-size:2rem}
+.login .err{min-height:1.2em}
+.userbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.85rem;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="loginView" hidden>
+  <form class="panel login" id="loginForm">
+    <h1>Console Repair Bench</h1>
+    <p class="sub" style="margin:0">Sign in to see the consoles on the bench.</p>
+    <label class="f" for="lEmail">Email
+      <input class="field" id="lEmail" type="email" autocomplete="username" required>
+    </label>
+    <label class="f" for="lPass">Password
+      <input class="field" id="lPass" type="password" autocomplete="current-password" required>
+    </label>
+    <button class="btn primary" type="submit" id="lBtn">Sign in</button>
+    <p class="err" id="lErr"></p>
+  </form>
+</div>
+
+<div class="wrap" id="setupView" hidden>
+  <div class="panel login">
+    <h1>Almost there</h1>
+    <p>Open <b>config.js</b> and paste in your Supabase URL and key. The README explains where to find them.</p>
+  </div>
+</div>
+
+<div class="wrap" id="appView" hidden>
+  <header class="top">
+    <div>
+      <h1>Console Repair Bench</h1>
+      <p class="sub">Every console on the bench, its tag, its photos, and exactly which parts it's waiting for.</p>
+    </div>
+    <div style="display:grid;gap:10px;justify-items:end">
+      <div class="stats" id="stats"></div>
+      <div class="userbar"><span id="who"></span><button class="btn small ghost" type="button" id="signOut">Sign out</button></div>
+    </div>
+  </header>
+
+  <ol class="steps" aria-label="How to use">
+    <li><b>1</b>Add a console with its tag (SP-001)</li>
+    <li><b>2</b>Upload a photo of it</li>
+    <li><b>3</b>Write the parts it needs</li>
+    <li><b>4</b>Tick a part when it arrives</li>
+  </ol>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <div class="layout">
+    <main>
+      <div class="toolbar">
+        <button class="btn primary" id="openAdd" type="button">+ Add a console</button>
+        <input class="search" id="search" type="search" placeholder="Search tag, console or part…" aria-label="Search">
+      </div>
+      <div class="toolbar"><div class="tabs" id="tabs" role="group" aria-label="Filter"></div></div>
+
+      <form class="panel" id="addForm" hidden>
+        <h2>New console</h2>
+        <div class="row3">
+          <label class="f" for="fTag">Tag
+            <input class="field tagf" id="fTag" required autocomplete="off" placeholder="SP-001">
+            <span class="hint" id="fTagHint">Type the letters, e.g. SP</span>
+          </label>
+          <label class="f" for="fName">Console <span class="hint">e.g. PS3 Slim</span>
+            <input class="field" id="fName" list="models" required autocomplete="off">
+          </label>
+          <label class="f" for="fOwner">Whose is it? <span class="hint">optional</span>
+            <input class="field" id="fOwner" autocomplete="off" placeholder="Customer, shop, mine">
+          </label>
+        </div>
+        <label class="f" for="fProblem">What's wrong with it?
+          <input class="field" id="fProblem" placeholder="e.g. No picture over HDMI" autocomplete="off">
+        </label>
+        <label class="f" for="fParts">Parts it needs <span class="hint">one per line, or separate with commas</span>
+          <textarea class="field" id="fParts" placeholder="Laser KHS-400C&#10;Thermal paste"></textarea>
+        </label>
+        <div class="sect">
+          <span class="sectlabel">Photos</span>
+          <div class="photos" id="fPhotos"></div>
+          <span class="hint" id="fPhotoHint"></span>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="submit" id="fSave">Save console</button>
+          <button class="btn ghost" type="button" id="cancelAdd">Cancel</button>
+        </div>
+      </form>
+      <datalist id="models">
+        <option>PS1 (fat)</option><option>PSone</option><option>PS2 Fat</option><option>PS2 Slim</option>
+        <option>PS3 Fat</option><option>PS3 Slim</option><option>PS3 Super Slim</option><option>PS4</option><option>PS Vita</option><option>PSP</option>
+        <option>Original Xbox</option><option>Xbox 360</option><option>Xbox One</option>
+        <option>NES</option><option>SNES</option><option>N64</option><option>GameCube</option><option>Wii</option><option>Wii U</option>
+        <option>Game Boy</option><option>Game Boy Color</option><option>Game Boy Advance</option><option>GBA SP</option><option>Nintendo DS Lite</option><option>3DS</option><option>Switch</option>
+        <option>Sega Mega Drive</option><option>Sega Saturn</option><option>Dreamcast</option>
+      </datalist>
+
+      <div class="list" id="list"><div class="empty"><h3>Loading your bench…</h3></div></div>
+    </main>
+
+    <aside class="buy" aria-label="Parts to buy">
+      <div class="bh">
+        <h2>Parts to buy</h2>
+        <p>Everything not ticked yet, from all consoles.</p>
+      </div>
+      <div id="buy"></div>
+    </aside>
+  </div>
+</div>
+
+<div class="viewer" id="viewer" hidden role="dialog" aria-modal="true" aria-label="Photo">
+  <div class="vbar">
+    <span class="t" id="vTitle"></span>
+    <span class="actions" id="vActions"></span>
+  </div>
+  <div class="vimg"><img id="vImg" alt=""></div>
+</div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const uid = () => Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+  const BUCKET = "photos";
+  const show = which => ["loginView","setupView","appView"].forEach(v => { $("#"+v).hidden = v !== which; });
+
+  const cfg = window.REPAIR_CONFIG || {};
+  if (!cfg.supabaseUrl || !cfg.supabaseKey || !window.supabase){ show("setupView"); return; }
+  const sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+
+  let consoles = [];   // {id, tag, name, owner, problem, notes, done, parts:[{id,name,got}], photos:[path], createdAt}
+  let loaded = false, started = false;
+  let filter = "all", query = "";
+  const ui = { readOnly:false, confirmDel:null, editing:null, uploading:{}, photoErr:{}, viewer:null, viewerConfirm:false };
+  let pending = [];
+
+  /* ---------- sign in ---------- */
+  $("#loginForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    $("#lBtn").disabled = true; $("#lErr").textContent = "";
+    const { error } = await sb.auth.signInWithPassword({ email: $("#lEmail").value.trim(), password: $("#lPass").value });
+    $("#lBtn").disabled = false;
+    if (error) $("#lErr").textContent = /invalid/i.test(error.message) ? "Wrong email or password." : "Couldn't sign in: " + error.message;
+  });
+  $("#signOut").onclick = () => sb.auth.signOut();
+  sb.auth.onAuthStateChange((_ev, session) => {
+    if (session){ $("#who").textContent = session.user.email; show("appView"); if (!started){ started = true; start(); } }
+    else { show("loginView"); }
+  });
+
+  /* ---------- data ---------- */
+  const toRow = c => ({ id:c.id, tag:c.tag||"", name:c.name, owner:c.owner||"", problem:c.problem||"", notes:c.notes||"",
+    done:!!c.done, parts:c.parts||[], photos:c.photos||[] });
+  const fromRow = r => Object.assign({}, r, { parts:r.parts||[], photos:r.photos||[], createdAt: Date.parse(r.created_at)||0 });
+
+  async function fetchAll(){
+    const { data, error } = await sb.from("consoles").select("*");
+    if (error){ showBanner("Couldn't load the list: " + error.message); return; }
+    consoles = data.map(fromRow); loaded = true;
+    if (!consoles.length && !window.__emptyChecked){ window.__emptyChecked = true; }
+    render(); refreshPhotoUrls();
+  }
+  let refetchTimer = null;
+  function start(){
+    fetchAll();
+    sb.channel("consoles-live")
+      .on("postgres_changes", { event:"*", schema:"public", table:"consoles" }, () => {
+        clearTimeout(refetchTimer); refetchTimer = setTimeout(fetchAll, 400);
+      }).subscribe();
+  }
+  const queues = {};
+  function saveConsole(c){
+    const prev = queues[c.id] || Promise.resolve();
+    queues[c.id] = prev.then(async () => {
+      const { error } = await sb.from("consoles").upsert(toRow(c));
+      if (error) showBanner("Couldn't save that change: " + error.message);
+    });
+    return queues[c.id];
+  }
+  function removeConsole(id){
+    const c = find(id);
+    consoles = consoles.filter(x => x.id !== id);
+    render();
+    (async () => {
+      const { error } = await sb.from("consoles").delete().eq("id", id);
+      if (error) showBanner("Couldn't delete: " + error.message);
+      if (c && c.photos && c.photos.length) await sb.storage.from(BUCKET).remove(c.photos);
+    })();
+  }
+  function showBanner(t){ const b=$("#banner"); b.textContent=t; b.hidden=false; }
+
+  /* ---------- photos ---------- */
+  const urlCache = {};   // path -> {url, exp}
+  const src = p => (urlCache[p] && urlCache[p].url) || "";
+  async function refreshPhotoUrls(){
+    const now = Date.now();
+    const need = [...new Set(consoles.flatMap(c => c.photos||[]))].filter(p => !urlCache[p] || urlCache[p].exp < now + 60000);
+    if (!need.length) return;
+    const { data, error } = await sb.storage.from(BUCKET).createSignedUrls(need, 60*60*6);
+    if (error || !data) return;
+    data.forEach(d => { if (d.signedUrl) urlCache[d.path] = { url:d.signedUrl, exp: now + 60*60*6*1000 }; });
+    render(); if (ui.viewer) drawViewer();
+  }
+  setInterval(refreshPhotoUrls, 30*60*1000);
+
+  const OK_TYPES = ["image/jpeg","image/png","image/webp","image/gif"];
+  async function prepare(file){
+    try{
+      const url = URL.createObjectURL(file);
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+      const scale = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight));
+      const cv = document.createElement("canvas");
+      cv.width = Math.round(img.naturalWidth * scale); cv.height = Math.round(img.naturalHeight * scale);
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url);
+      const blob = await new Promise(res => cv.toBlob(res, "image/jpeg", 0.85));
+      if (blob && blob.size) return blob;
+    }catch(e){}
+    if (OK_TYPES.includes(file.type)) return file;
+    throw { unsupported: true };
+  }
+  async function uploadPhotos(c, files){
+    if (!files.length) return;
+    ui.uploading[c.id] = (ui.uploading[c.id] || 0) + files.length; delete ui.photoErr[c.id]; render();
+    for (const f of files){
+      try{
+        const blob = await prepare(f);
+        const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : blob.type === "image/gif" ? "gif" : "jpg";
+        const path = `${c.id}/${uid()}.${ext}`;
+        const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || "image/jpeg" });
+        if (error) throw error;
+        urlCache[path] = { url: URL.createObjectURL(blob), exp: Date.now() + 60*60*1000 };
+        const cur = find(c.id) || c;
+        cur.photos = (cur.photos || []).concat(path);
+        await saveConsole(cur);
+      }catch(e){
+        ui.photoErr[c.id] = e && e.unsupported
+          ? "That photo format isn't supported. Use JPG or PNG. On iPhone: Settings › Camera › Formats › Most Compatible."
+          : "Couldn't upload that photo" + (e && e.message ? ": " + e.message : ". Try again.");
+      }
+      ui.uploading[c.id]--; render();
+    }
+  }
+  async function deletePhoto(cid, path){
+    const c = find(cid); if (!c) return;
+    c.photos = (c.photos || []).filter(x => x !== path);
+    await saveConsole(c);
+    sb.storage.from(BUCKET).remove([path]);
+    render();
+  }
+
+  /* ---------- tags ---------- */
+  const normTag = t => String(t||"").trim().toUpperCase().replace(/\s+/g,"-");
+  function nextTag(prefix, exceptId){
+    prefix = String(prefix||"").toUpperCase().replace(/[^A-Z]/g,"");
+    if (!prefix) return "";
+    let max = 0;
+    consoles.forEach(c => { if (c.id === exceptId) return; const m = normTag(c.tag).match(new RegExp("^"+prefix+"-?(\\d+)$")); if (m) max = Math.max(max, +m[1]); });
+    return prefix + "-" + String(max + 1).padStart(3, "0");
+  }
+  const tagTaken = (tag, exceptId) => !!tag && consoles.some(c => c.id !== exceptId && normTag(c.tag) === tag);
+  // Renders the helper line under a tag field: next free number, or a duplicate warning.
+  function tagHelp(inputEl, hintEl, exceptId){
+    const v = normTag(inputEl.value);
+    hintEl.classList.remove("warn");
+    if (!v){ hintEl.textContent = "Type the letters, e.g. SP"; return; }
+    if (/^[A-Z]+-?$/.test(v)){
+      const n = nextTag(v, exceptId);
+      hintEl.innerHTML = `Next free: <button type="button" class="linkbtn" data-fill="${esc(n)}">${esc(n)}</button>`; return;
+    }
+    if (tagTaken(v, exceptId)){ hintEl.classList.add("warn"); hintEl.textContent = v + " is already used by another console."; return; }
+    hintEl.textContent = "Looks good.";
+  }
+
+  /* ---------- logic ---------- */
+  function statusOf(c){
+    if (c.done) return { key:"done", label:"Fixed" };
+    const parts = c.parts || [];
+    const miss = parts.filter(p => !p.got).length;
+    if (!parts.length) return { key:"none", label:"No parts listed" };
+    if (miss) return { key:"wait", label:`Waiting for ${miss} part${miss>1?"s":""}` };
+    return { key:"ready", label:"Ready to fix" };
+  }
+  const FILTERS = [["all","All"],["wait","Waiting for parts"],["ready","Ready to fix"],["done","Fixed"]];
+  function matchesFilter(c){
+    const s = statusOf(c).key;
+    if (filter === "all") return true;
+    if (filter === "ready") return s === "ready" || s === "none";
+    return s === filter;
+  }
+  function matchesQuery(c){
+    if (!query) return true;
+    const hay = [c.tag,c.name,c.owner,c.problem,c.notes,...(c.parts||[]).map(p=>p.name)].join(" ").toLowerCase();
+    return hay.includes(query);
+  }
+  const splitParts = t => t.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  const label = c => (c.tag ? normTag(c.tag) + " " : "") + c.name;
+  const canPhoto = () => true;
+
+  /* ---------- render ---------- */
+  function render(){
+    const ae = document.activeElement;
+    const active = ae && ae.id && ae.closest("#list") ? ae.id : null;
+    const keepVal = active && ae.tagName === "INPUT" ? ae.value : null;
+
+    const counts = { all: consoles.length, wait:0, ready:0, done:0 };
+    consoles.forEach(c => { const s = statusOf(c).key; if (s==="wait") counts.wait++; else if (s==="done") counts.done++; else counts.ready++; });
+    const missingTotal = consoles.filter(c=>!c.done).reduce((n,c)=>n+(c.parts||[]).filter(p=>!p.got).length,0);
+    $("#stats").innerHTML = `
+      <div class="stat"><span class="v">${counts.all - counts.done}</span><span class="k">On the bench</span></div>
+      <div class="stat wait"><span class="v">${missingTotal}</span><span class="k">Parts missing</span></div>
+      <div class="stat ready"><span class="v">${counts.ready}</span><span class="k">Ready to fix</span></div>`;
+    $("#tabs").innerHTML = FILTERS.map(([k,l]) =>
+      `<button type="button" class="tab" data-filter="${k}" aria-pressed="${filter===k}">${l}<span class="n">${counts[k]}</span></button>`).join("");
+    $("#openAdd").disabled = ui.readOnly;
+
+    const list = $("#list");
+    if (!loaded){ list.innerHTML = `<div class="empty"><h3>Loading your bench…</h3></div>`; renderBuy(); return; }
+    if (!consoles.length){
+      list.innerHTML = `<div class="empty"><h3>No consoles yet</h3><p>Press <b>+ Add a console</b>, give it a tag like SP-001, and add a photo.</p></div>`;
+    } else {
+      const order = { wait:0, none:1, ready:1, done:2 };
+      const shown = consoles.filter(c => matchesFilter(c) && matchesQuery(c))
+        .sort((a,b) => (order[statusOf(a).key]-order[statusOf(b).key]) || normTag(a.tag||"~").localeCompare(normTag(b.tag||"~"), undefined, {numeric:true}));
+      list.innerHTML = shown.length ? shown.map(ticketHTML).join("")
+        : `<div class="empty"><h3>Nothing here</h3><p>No consoles match this filter${query?" or search":""}.</p></div>`;
+    }
+    renderBuy();
+    if (active){ const el = document.getElementById(active); if (el){ if (keepVal !== null) el.value = keepVal; el.focus(); } }
+    document.querySelectorAll("[data-taghint]").forEach(inp => tagHelp(inp, document.getElementById(inp.dataset.taghint), inp.dataset.c));
+  }
+
+  function photosHTML(c){
+    const ph = c.photos || [];
+    const up = ui.uploading[c.id] || 0;
+    const items = ph.map((pid,i) => `<button type="button" class="thumb" data-act="view" data-c="${c.id}" data-i="${i}" aria-label="Open photo ${i+1} of ${esc(label(c))}"><img src="${src(pid)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></button>`).join("");
+    const uploading = up ? `<div class="uploading">Uploading ${up}…</div>` : "";
+    const add = canPhoto() ? `<label class="addphoto" for="up-${c.id}"><span><b>+</b>Add photo</span>
+        <input type="file" id="up-${c.id}" accept="image/*" multiple data-act="upload" data-c="${c.id}"></label>` : "";
+    if (!items && !uploading && !add) return "";
+    return `<div class="sect"><span class="sectlabel">Photos${ph.length?` · ${ph.length}`:""}</span>
+      <div class="photos">${items}${uploading}${add}</div>
+      ${ui.photoErr[c.id]?`<p class="err">${esc(ui.photoErr[c.id])}</p>`:""}</div>`;
+  }
+
+  function ticketHTML(c){
+    if (ui.editing === c.id) return editHTML(c);
+    const st = statusOf(c);
+    const parts = c.parts || [];
+    const ro = ui.readOnly ? "disabled" : "";
+    const first = (c.photos||[])[0];
+    const cover = first
+      ? `<button type="button" class="cover" data-act="view" data-c="${c.id}" data-i="0" aria-label="Open photo of ${esc(label(c))}"><img src="${src(first)}" alt="" onerror="this.style.visibility='hidden'"></button>`
+      : `<div class="cover empty">No photo</div>`;
+
+    const partsHTML = parts.length ? `<ul class="parts">${parts.map(p => `
+      <li class="part ${p.got?"got":"miss"}">
+        <input type="checkbox" id="chk-${c.id}-${p.id}" data-act="toggle" data-c="${c.id}" data-p="${p.id}" ${p.got?"checked":""} ${ro}>
+        <label class="pname" for="chk-${c.id}-${p.id}">${esc(p.name)}</label>
+        <span class="pstate">${p.got?"Got it":"Need it"}</span>
+        ${ui.readOnly?"":`<button class="x" type="button" data-act="delpart" data-c="${c.id}" data-p="${p.id}" aria-label="Remove ${esc(p.name)}" title="Remove part">×</button>`}
+      </li>`).join("")}</ul>` : `<p class="noparts">No parts listed yet. Add one below.</p>`;
+
+    const foot = ui.confirmDel === c.id
+      ? `<div class="confirm">Delete ${esc(label(c))} and its photos for good?
+           <button class="btn small danger" type="button" data-act="delyes" data-c="${c.id}">Yes, delete</button>
+           <button class="btn small" type="button" data-act="delno">Keep it</button></div>`
+      : `<div class="left"><button class="btn small ${c.done?"":"primary"}" type="button" data-act="done" data-c="${c.id}" ${ro}>${c.done?"Move back to bench":"Mark as fixed"}</button>
+           <button class="btn small" type="button" data-act="edit" data-c="${c.id}" ${ro}>Edit tag & details</button></div>
+         <button class="btn small ghost" type="button" data-act="del" data-c="${c.id}" ${ro}>Delete</button>`;
+
+    return `<article class="ticket ${c.done?"isdone":""}">
+      <div class="head">
+        ${cover}
+        <div class="htext">
+          <div class="hrow">
+            ${c.tag?`<span class="tag">${esc(normTag(c.tag))}</span>`:`<button type="button" class="tag none" data-act="edit" data-c="${c.id}" ${ro}>+ Add tag</button>`}
+            <span class="pill ${st.key}">${st.label}</span>
+          </div>
+          <h3>${esc(c.name)}</h3>
+          ${c.owner?`<div class="who">For: ${esc(c.owner)}</div>`:""}
+        </div>
+      </div>
+      <div class="body">
+        ${c.problem?`<p class="problem"><b>Problem:</b> ${esc(c.problem)}</p>`:""}
+        ${photosHTML(c)}
+        <div class="sect">
+          <span class="sectlabel">Parts · tick when you have it</span>
+          ${partsHTML}
+        </div>
+        ${ui.readOnly?"":`<form class="addpart" data-act="addpart" data-c="${c.id}">
+          <input class="field" id="add-${c.id}" placeholder="Add a part, then press Enter" autocomplete="off" aria-label="New part for ${esc(label(c))}">
+          <button class="btn small" type="submit">Add</button>
+        </form>`}
+        <details class="notes" ${c.notes?"open":""}>
+          <summary>Notes</summary>
+          <textarea class="field" id="notes-${c.id}" data-act="notes" data-c="${c.id}" placeholder="Where you bought parts, what you tried, anything to remember" ${ro}>${esc(c.notes||"")}</textarea>
+        </details>
+      </div>
+      <div class="foot">${foot}</div>
+    </article>`;
+  }
+
+  function editHTML(c){
+    return `<article class="ticket"><form class="panel" data-act="saveedit" data-c="${c.id}" style="border:0">
+      <h2>Edit ${esc(label(c))}</h2>
+      <div class="row3">
+        <label class="f" for="eTag-${c.id}">Tag
+          <input class="field tagf" id="eTag-${c.id}" name="tag" value="${esc(c.tag||"")}" autocomplete="off" placeholder="SP-001" data-taghint="eHint-${c.id}" data-c="${c.id}">
+          <span class="hint" id="eHint-${c.id}"></span>
+        </label>
+        <label class="f" for="eName-${c.id}">Console
+          <input class="field" id="eName-${c.id}" name="name" value="${esc(c.name)}" list="models" required autocomplete="off">
+        </label>
+        <label class="f" for="eOwner-${c.id}">Whose is it?
+          <input class="field" id="eOwner-${c.id}" name="owner" value="${esc(c.owner||"")}" autocomplete="off">
+        </label>
+      </div>
+      <label class="f" for="eProb-${c.id}">What's wrong with it?
+        <input class="field" id="eProb-${c.id}" name="problem" value="${esc(c.problem||"")}" autocomplete="off">
+      </label>
+      <div class="actions"><button class="btn primary" type="submit">Save changes</button>
+        <button class="btn ghost" type="button" data-act="canceledit">Cancel</button></div>
+    </form></article>`;
+  }
+
+  function renderBuy(){
+    const map = new Map();
+    consoles.filter(c => !c.done).forEach(c => (c.parts||[]).filter(p => !p.got).forEach(p => {
+      const k = p.name.trim().toLowerCase();
+      if (!map.has(k)) map.set(k, { name:p.name.trim(), forList:[] });
+      map.get(k).forList.push(c);
+    }));
+    const items = [...map.values()].sort((a,b) => b.forList.length - a.forList.length || a.name.localeCompare(b.name));
+    const box = $("#buy");
+    if (!items.length){ box.innerHTML = `<p class="buyempty">Nothing to buy right now. Every listed part is ticked.</p>`; return; }
+    box.innerHTML = `<ul class="buylist">${items.map(i => `
+      <li><div class="bn"><span>${esc(i.name)}</span><span class="qty">×${i.forList.length}</span></div>
+      <span class="for">${i.forList.map(c => `<span class="mini" title="${esc(c.name)}">${esc(c.tag?normTag(c.tag):c.name)}</span>`).join("")}</span></li>`).join("")}</ul>
+      <div class="copyrow"><button class="btn small" type="button" id="copyBuy">Copy list</button><span class="msg" id="copyMsg"></span></div>`;
+    $("#copyBuy").onclick = () => {
+      const text = items.map(i => `${i.forList.length}x ${i.name} (${i.forList.map(label).join(", ")})`).join("\n");
+      const msg = $("#copyMsg");
+      const fallback = () => { msg.textContent = "Couldn't copy. Select the list and copy it by hand."; };
+      try{ navigator.clipboard.writeText(text).then(() => { msg.textContent = "Copied."; }, fallback); }catch(e){ fallback(); }
+    };
+  }
+
+  /* ---------- photo viewer ---------- */
+  function openViewer(cid, i){ ui.viewer = { cid, i }; ui.viewerConfirm = false; drawViewer(); }
+  function closeViewer(){ ui.viewer = null; $("#viewer").hidden = true; }
+  function drawViewer(){
+    const v = ui.viewer; if (!v) return;
+    const c = find(v.cid); const ph = c && c.photos || [];
+    if (!ph.length){ closeViewer(); return; }
+    v.i = Math.max(0, Math.min(v.i, ph.length-1));
+    $("#vImg").src = src(ph[v.i]); $("#vImg").alt = "Photo of " + label(c);
+    $("#vTitle").textContent = `${label(c)} · ${v.i+1} of ${ph.length}`;
+    const nav = ph.length > 1 ? `<button class="btn small" type="button" data-v="prev">‹ Prev</button><button class="btn small" type="button" data-v="next">Next ›</button>` : "";
+    const del = !canPhoto() ? "" : ui.viewerConfirm
+      ? `<button class="btn small danger" type="button" data-v="delyes">Yes, delete photo</button><button class="btn small" type="button" data-v="delno">Keep</button>`
+      : `<button class="btn small" type="button" data-v="del">Delete photo</button>`;
+    $("#vActions").innerHTML = nav + del + `<button class="btn small" type="button" data-v="close">Close</button>`;
+    $("#viewer").hidden = false;
+  }
+  $("#viewer").addEventListener("click", async e => {
+    const b = e.target.closest("[data-v]");
+    if (!b){ if (e.target.id === "viewer" || e.target.classList.contains("vimg")) closeViewer(); return; }
+    const v = ui.viewer, c = find(v.cid);
+    if (b.dataset.v === "close") closeViewer();
+    else if (b.dataset.v === "prev"){ v.i = (v.i - 1 + c.photos.length) % c.photos.length; ui.viewerConfirm=false; drawViewer(); }
+    else if (b.dataset.v === "next"){ v.i = (v.i + 1) % c.photos.length; ui.viewerConfirm=false; drawViewer(); }
+    else if (b.dataset.v === "del"){ ui.viewerConfirm = true; drawViewer(); }
+    else if (b.dataset.v === "delno"){ ui.viewerConfirm = false; drawViewer(); }
+    else if (b.dataset.v === "delyes"){ ui.viewerConfirm = false; await deletePhoto(v.cid, c.photos[v.i]); drawViewer(); }
+  });
+  document.addEventListener("keydown", e => {
+    if (!ui.viewer) return;
+    if (e.key === "Escape") closeViewer();
+    const c = find(ui.viewer.cid); if (!c || !c.photos.length) return;
+    if (e.key === "ArrowRight"){ ui.viewer.i = (ui.viewer.i + 1) % c.photos.length; drawViewer(); }
+    if (e.key === "ArrowLeft"){ ui.viewer.i = (ui.viewer.i - 1 + c.photos.length) % c.photos.length; drawViewer(); }
+  });
+
+  /* ---------- add form ---------- */
+  const find = id => consoles.find(c => c.id === id);
+  const form = $("#addForm");
+  function drawPending(){
+    const box = $("#fPhotos");
+    $("#fPhotoHint").textContent = pending.length ? "" : "Take a photo of the console so you know which one it is.";
+    box.innerHTML = pending.map((p,i) => `<div class="thumb"><img src="${p.url}" alt=""><button type="button" class="rm" data-rmpending="${i}" aria-label="Remove photo">×</button></div>`).join("")
+      + `<label class="addphoto" for="fFile"><span><b>+</b>Add photo</span><input type="file" id="fFile" accept="image/*" multiple></label>`;
+  }
+  function resetForm(){ form.reset(); pending.forEach(p => URL.revokeObjectURL(p.url)); pending = []; drawPending(); tagHelp($("#fTag"), $("#fTagHint")); }
+  $("#openAdd").onclick = () => { resetForm(); form.hidden = false; $("#fTag").focus(); };
+  $("#cancelAdd").onclick = () => { resetForm(); form.hidden = true; };
+  $("#fTag").addEventListener("input", () => tagHelp($("#fTag"), $("#fTagHint")));
+  form.addEventListener("change", e => {
+    if (e.target.id === "fFile"){ [...e.target.files].forEach(f => pending.push({ file:f, url:URL.createObjectURL(f) })); drawPending(); }
+  });
+  form.addEventListener("click", e => {
+    const r = e.target.closest("[data-rmpending]");
+    if (r){ const [p] = pending.splice(+r.dataset.rmpending, 1); URL.revokeObjectURL(p.url); drawPending(); }
+  });
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    const tag = normTag($("#fTag").value), name = $("#fName").value.trim();
+    if (!tag || !name) return;
+    if (/^[A-Z]+-?$/.test(tag)){ $("#fTag").value = nextTag(tag); }
+    const finalTag = normTag($("#fTag").value);
+    if (tagTaken(finalTag)){ tagHelp($("#fTag"), $("#fTagHint")); $("#fTag").focus(); return; }
+    const c = { id: uid(), tag: finalTag, name, owner: $("#fOwner").value.trim(), problem: $("#fProblem").value.trim(),
+      notes:"", done:false, createdAt: Date.now(), photos: [],
+      parts: splitParts($("#fParts").value).map(n => ({ id: uid(), name:n, got:false })) };
+    const files = pending.map(p => p.file);
+    consoles.push(c); saveConsole(c);
+    resetForm(); form.hidden = true; filter = "all"; query = ""; $("#search").value = ""; render();
+    uploadPhotos(c, files);
+  });
+  $("#search").addEventListener("input", e => { query = e.target.value.trim().toLowerCase(); render(); });
+
+  /* ---------- ticket events ---------- */
+  document.addEventListener("click", e => {
+    const fill = e.target.closest("[data-fill]");
+    if (fill){ const inp = fill.closest("label").querySelector("input"); inp.value = fill.dataset.fill; inp.dispatchEvent(new Event("input",{bubbles:true})); inp.focus(); return; }
+    const t = e.target.closest("[data-filter],[data-act]"); if (!t || t.tagName === "INPUT" || t.tagName === "FORM") return;
+    if (t.dataset.filter){ filter = t.dataset.filter; render(); return; }
+    const act = t.dataset.act, c = find(t.dataset.c);
+    if (act === "done" && c){ c.done = !c.done; saveConsole(c); render(); }
+    else if (act === "del"){ ui.confirmDel = t.dataset.c; render(); }
+    else if (act === "delno"){ ui.confirmDel = null; render(); }
+    else if (act === "delyes"){ ui.confirmDel = null; removeConsole(t.dataset.c); }
+    else if (act === "delpart" && c){ c.parts = c.parts.filter(p => p.id !== t.dataset.p); saveConsole(c); render(); }
+    else if (act === "edit" && c){ ui.editing = c.id; render(); const el = document.getElementById("eTag-"+c.id); if (el) el.focus(); }
+    else if (act === "canceledit"){ ui.editing = null; render(); }
+    else if (act === "view" && c){ openViewer(c.id, +t.dataset.i || 0); }
+  });
+  document.addEventListener("input", e => {
+    const t = e.target;
+    if (t.dataset && t.dataset.taghint) tagHelp(t, document.getElementById(t.dataset.taghint), t.dataset.c);
+  });
+  document.addEventListener("change", e => {
+    const t = e.target;
+    if (t.dataset.act === "toggle"){ const c = find(t.dataset.c); const p = c && c.parts.find(p => p.id === t.dataset.p);
+      if (p){ p.got = t.checked; saveConsole(c); render(); } }
+    else if (t.dataset.act === "notes"){ const c = find(t.dataset.c); if (c && c.notes !== t.value){ c.notes = t.value; saveConsole(c); } }
+    else if (t.dataset.act === "upload"){ const c = find(t.dataset.c); const files = [...t.files]; t.value = ""; if (c) uploadPhotos(c, files); }
+  });
+  document.addEventListener("submit", e => {
+    const f = e.target;
+    if (f.dataset.act === "addpart"){
+      e.preventDefault();
+      const c = find(f.dataset.c); const inp = f.querySelector("input"); if (!c) return;
+      const names = splitParts(inp.value); if (!names.length) return;
+      c.parts = (c.parts||[]).concat(names.map(n => ({ id: uid(), name:n, got:false })));
+      c.done = false; inp.value = ""; saveConsole(c); render();
+    } else if (f.dataset.act === "saveedit"){
+      e.preventDefault();
+      const c = find(f.dataset.c); if (!c) return;
+      let tag = normTag(f.elements.tag.value);
+      if (/^[A-Z]+-?$/.test(tag)) tag = nextTag(tag, c.id);
+      if (tagTaken(tag, c.id)){ f.elements.tag.focus(); return; }
+      c.tag = tag; c.name = f.elements.name.value.trim() || c.name;
+      c.owner = f.elements.owner.value.trim(); c.problem = f.elements.problem.value.trim();
+      ui.editing = null; saveConsole(c); render();
+    }
+  });
+
+  drawPending();
+  render();
+})();
+</script>
+</body>
+</html>
